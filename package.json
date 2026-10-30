@@ -1,0 +1,33 @@
+{
+  "name": "reelster",
+  "version": "1.0.0",
+  "description": "Browser extension that exports every Reel sent and received in an Instagram DM thread into a single .tar.gz.",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "test:e2e": "node --test test/e2e/*.e2e.js",
+    "build": "node scripts/build.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prod455/reelster.git"
+  },
+  "keywords": [
+    "instagram",
+    "reels",
+    "chrome-extension",
+    "manifest-v3",
+    "export",
+    "backup",
+    "tar",
+    "gzip"
+  ],
+  "devDependencies": {
+    "playwright": "^1.50.0"
+  }
+}

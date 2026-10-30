@@ -1,0 +1,17 @@
+{
+  "extName": { "message": "Reelster — export Reels from Instagram DMs" },
+  "extDescription": { "message": "Download every Reel sent and received in an Instagram DM conversation as a single .tar.gz." },
+  "popupHint": { "message": "Open a conversation at instagram.com/direct and click the button." },
+  "popupNotThread": { "message": "This tab is not an Instagram DM conversation." },
+  "popupExport": { "message": "Export Reels from this conversation" },
+  "exportTitle": { "message": "Exporting Reels" },
+  "keepOpen": { "message": "Keep this tab and the Instagram tab open until the download starts." },
+  "stepResolve": { "message": "Finding the conversation…" },
+  "stepScan": { "message": "Reading messages: $MESSAGES$ read, $REELS$ Reels found", "placeholders": { "messages": { "content": "$1" }, "reels": { "content": "$2" } } },
+  "stepDownload": { "message": "Downloading videos: $DONE$ of $TOTAL$", "placeholders": { "done": { "content": "$1" }, "total": { "content": "$2" } } },
+  "stepCompress": { "message": "Building the .tar.gz…" },
+  "done": { "message": "Done: $SENT$ sent, $RECEIVED$ received, $FAILED$ failed. The download has started.", "placeholders": { "sent": { "content": "$1" }, "received": { "content": "$2" }, "failed": { "content": "$3" } } },
+  "noReels": { "message": "No Reels were found in this conversation." },
+  "saveAgain": { "message": "Save again" },
+  "error": { "message": "Error: $MESSAGE$", "placeholders": { "message": { "content": "$1" } } }
+}
