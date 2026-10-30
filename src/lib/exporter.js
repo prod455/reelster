@@ -1,38 +1,17 @@
-// Ties the Direct API, reel extraction and the archive together.
+// Turns the Reels of a chat into tar entries.
 
-import { extractReels, pickBestVideo, reelFileName } from "./reels.js";
-import { iterateThreadItems } from "./thread.js";
-
-/** Reads the whole thread and returns its reels, oldest first, deduplicated per direction. */
-export async function collectReels({ api, threadId, sleep, onProgress }) {
-  const byKey = new Map();
-  let messages = 0;
-  for await (const { items, viewerId } of iterateThreadItems(api, threadId, sleep)) {
-    messages += items.length;
-    for (const reel of extractReels(items, viewerId)) {
-      // Pages come newest first; keeping the last one seen keeps the oldest share.
-      byKey.set(`${reel.direction}:${reel.mediaId}`, reel);
-    }
-    onProgress({ phase: "scan", messages, reels: byKey.size });
-  }
-  return [...byKey.values()].sort((a, b) => a.sentAt - b.sentAt);
-}
-
-async function videoUrlFor(api, reel) {
-  if (reel.videoUrl) return reel.videoUrl;
-  const { items } = await api(`/api/v1/media/${reel.mediaId}/info/`);
-  const url = pickBestVideo(items?.[0]?.video_versions);
-  if (!url) throw new Error("reel has no video (deleted, private or not a video)");
-  return url;
-}
+import { reelFileName } from "./reels.js";
 
 const encoder = new TextEncoder();
 
 /**
- * Yields tar entries: one .mp4 per reel and a final manifest.json. A reel that
- * cannot be downloaded is listed under `failed` instead of aborting the export.
+ * Yields one .mp4 entry per reel and a final manifest.json. A reel that
+ * cannot be downloaded is listed under `failed` instead of aborting.
+ *
+ * resolveVideo(reel) -> video URL, for reels whose message has no inline video.
+ * fetchVideo(url) -> Uint8Array
  */
-export async function* archiveEntries({ api, fetchVideo, reels, threadId, onProgress }) {
+export async function* archiveEntries({ reels, resolveVideo, fetchVideo, threadId, onProgress }) {
   const exported = [];
   const failed = [];
   for (const [index, reel] of reels.entries()) {
@@ -40,12 +19,12 @@ export async function* archiveEntries({ api, fetchVideo, reels, threadId, onProg
     const meta = {
       direction: reel.direction,
       shortcode: reel.shortcode,
-      url: reel.shortcode ? `https://www.instagram.com/reel/${reel.shortcode}/` : null,
+      url: `https://www.instagram.com/reel/${reel.shortcode}/`,
       sent_at: new Date(reel.sentAt).toISOString(),
       sender_id: reel.senderId,
     };
     try {
-      const data = await fetchVideo(await videoUrlFor(api, reel));
+      const data = await fetchVideo(reel.videoUrl ?? (await resolveVideo(reel)));
       const file = reelFileName(reel);
       yield { name: file, data, mtime: new Date(reel.sentAt) };
       exported.push({ file, ...meta });

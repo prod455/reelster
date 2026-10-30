@@ -1,4 +1,4 @@
-import { threadIdFromUrl } from "./lib/thread.js";
+import { threadIdFromUrl } from "./lib/messages.js";
 
 const t = (key) => chrome.i18n.getMessage(key);
 const hint = document.getElementById("hint");

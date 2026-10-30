@@ -1,40 +1,22 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { extractReels, pickBestVideo, shortcodeToMediaId, reelFileName } from "../src/lib/reels.js";
+import { extractReel, reelsFromMessages, pickBestVideo, findVideoForShortcode, reelFileName } from "../src/lib/reels.js";
 
-const VIEWER = "111";
-const OTHER = "222";
+const VIEWER = "2001";
+const OTHER = "2002";
 
-const clipItem = (overrides = {}) => ({
-  item_id: "i1",
-  item_type: "clip",
-  user_id: OTHER,
-  timestamp: "1700000000123456",
-  clip: { clip: { pk: "999", code: "Cabc123", video_versions: [{ url: "https://cdn/a.mp4", width: 720, height: 1280 }] } },
-  ...overrides,
+const message = (id, igid, content, extra = {}) => ({
+  message_id: id,
+  timestamp_ms: "1700000000123",
+  sender: { id: "fb" + igid, igid, user_dict: { id: igid } },
+  content,
+  ...extra,
 });
 
-test("shortcodeToMediaId decodes Instagram base64 shortcodes", () => {
-  assert.equal(shortcodeToMediaId("B"), "1");
-  assert.equal(shortcodeToMediaId("BA"), "64");
-  assert.equal(shortcodeToMediaId("_"), "63");
-});
-
-test("shortcodeToMediaId ignores the private-post suffix beyond 11 chars", () => {
-  assert.equal(shortcodeToMediaId("BAAAAAAAAAAxyz"), shortcodeToMediaId("BAAAAAAAAAA"));
-});
-
-test("shortcodeToMediaId rejects invalid characters", () => {
-  assert.throws(() => shortcodeToMediaId("ab$"), /invalid shortcode/);
-});
+const xmaReel = (code) => ({ __typename: "SlideMessageXMA", target_url: `https://www.instagram.com/reel/${code}/?igsh=abc` });
 
 test("pickBestVideo picks the largest resolution", () => {
-  const best = pickBestVideo([
-    { url: "s", width: 360, height: 640 },
-    { url: "l", width: 1080, height: 1920 },
-    { url: "m", width: 720, height: 1280 },
-  ]);
-  assert.equal(best, "l");
+  assert.equal(pickBestVideo([{ url: "s", width: 360, height: 640 }, { url: "l", width: 1080, height: 1920 }]), "l");
 });
 
 test("pickBestVideo returns null when there are no versions", () => {
@@ -42,63 +24,75 @@ test("pickBestVideo returns null when there are no versions", () => {
   assert.equal(pickBestVideo([]), null);
 });
 
-test("extractReels marks a clip from the other person as received", () => {
-  const [r] = extractReels([clipItem()], VIEWER);
-  assert.deepEqual(r, {
-    itemId: "i1",
-    mediaId: "999",
-    shortcode: "Cabc123",
+test("extractReel reads a shared reel link and marks it received", () => {
+  assert.deepEqual(extractReel(message("m1", OTHER, xmaReel("DAbc_-1")), VIEWER), {
+    messageId: "m1",
+    shortcode: "DAbc_-1",
     direction: "received",
     senderId: OTHER,
     sentAt: 1700000000123,
-    videoUrl: "https://cdn/a.mp4",
+    videoUrl: null,
   });
 });
 
-test("extractReels marks a clip from the viewer as sent", () => {
-  const [r] = extractReels([clipItem({ user_id: VIEWER })], VIEWER);
-  assert.equal(r.direction, "sent");
+test("extractReel marks a reel from the viewer as sent", () => {
+  assert.equal(extractReel(message("m1", VIEWER, xmaReel("A")), VIEWER).direction, "sent");
 });
 
-test("extractReels accepts media_share items only when they are clips with video", () => {
-  const share = (product_type) => ({
-    item_id: "m", item_type: "media_share", user_id: OTHER, timestamp: "1",
-    media_share: { pk: "5", code: "Xyz", product_type, media_type: 2, video_versions: [{ url: "u", width: 1, height: 1 }] },
-  });
-  assert.equal(extractReels([share("clips")], VIEWER).length, 1);
-  assert.equal(extractReels([share("feed")], VIEWER).length, 0);
+test("extractReel falls back to user_dict.id for the sender", () => {
+  const m = message("m1", OTHER, xmaReel("A"));
+  delete m.sender.igid;
+  assert.equal(extractReel(m, VIEWER).senderId, OTHER);
 });
 
-test("extractReels reads xma_clip shares from the reel URL without an inline video", () => {
-  const item = {
-    item_id: "x", item_type: "xma_clip", user_id: VIEWER, timestamp: "2000000",
-    xma_clip: [{ target_url: "https://www.instagram.com/reel/BA/?igsh=abc" }],
-  };
-  const [r] = extractReels([item], VIEWER);
-  assert.equal(r.shortcode, "BA");
-  assert.equal(r.mediaId, "64");
-  assert.equal(r.videoUrl, null);
-  assert.equal(r.direction, "sent");
+test("extractReel uses inline clip media with its best video", () => {
+  const content = { __typename: "SlideMessageClip", clip: { code: "Cxyz", product_type: "clips", video_versions: [{ url: "v", width: 1, height: 1 }] } };
+  const reel = extractReel(message("m1", OTHER, content), VIEWER);
+  assert.equal(reel.shortcode, "Cxyz");
+  assert.equal(reel.videoUrl, "v");
 });
 
-test("extractReels ignores text, photos and other item types", () => {
-  const items = [
-    { item_id: "t", item_type: "text", user_id: OTHER, timestamp: "1", text: "oi" },
-    { item_id: "p", item_type: "media", user_id: OTHER, timestamp: "1", media: { media_type: 1 } },
+test("extractReel finds a reel link pasted in a text message", () => {
+  const m = message("m1", OTHER, { __typename: "SlideMessageText" }, { text_body: "olha https://instagram.com/reels/QQ9/ kkk" });
+  assert.equal(extractReel(m, VIEWER).shortcode, "QQ9");
+});
+
+test("extractReel ignores texts, photos, videos and feed posts", () => {
+  const cases = [
+    { __typename: "SlideMessageText", text_body: "oi" },
+    { __typename: "SlideMessageImage", image_versions2: { candidates: [{ url: "https://scontent.cdninstagram.com/a.jpg" }] } },
+    { __typename: "SlideMessageVideo", video_url: "https://scontent.cdninstagram.com/a.mp4" },
+    { __typename: "SlideMessageXMA", target_url: "https://www.instagram.com/p/POST1/" },
   ];
-  assert.deepEqual(extractReels(items, VIEWER), []);
+  for (const content of cases) assert.equal(extractReel(message("m", OTHER, content), VIEWER), null);
 });
 
-test("extractReels skips a clip with no media id or shortcode", () => {
-  assert.deepEqual(extractReels([clipItem({ clip: { clip: {} } })], VIEWER), []);
+test("extractReel fails loudly when the sender id is missing", () => {
+  const m = message("m1", OTHER, xmaReel("A"));
+  m.sender = {};
+  assert.throws(() => extractReel(m, VIEWER), /sender/);
+});
+
+test("reelsFromMessages keeps the oldest share per direction and sorts by date", () => {
+  const msgs = [
+    message("new", OTHER, xmaReel("X"), { timestamp_ms: "300" }),
+    message("old", OTHER, xmaReel("X"), { timestamp_ms: "100" }),
+    message("mine", VIEWER, xmaReel("X"), { timestamp_ms: "200" }),
+    message("text", OTHER, { __typename: "SlideMessageText" }, { text_body: "oi" }),
+  ];
+  assert.deepEqual(reelsFromMessages(msgs, VIEWER).map((r) => [r.messageId, r.direction]), [["old", "received"], ["mine", "sent"]]);
+});
+
+test("findVideoForShortcode finds the media object with that code anywhere in a response", () => {
+  const response = { data: { xdt_api__v1__media__shortcode__web_info: { items: [
+    { code: "OTHER", video_versions: [{ url: "no", width: 9, height: 9 }] },
+    { code: "ABC", video_versions: [{ url: "low", width: 1, height: 1 }, { url: "high", width: 2, height: 2 }] },
+  ] } } };
+  assert.equal(findVideoForShortcode(response, "ABC"), "high");
+  assert.equal(findVideoForShortcode(response, "NONE"), null);
 });
 
 test("reelFileName groups by direction and is sortable by date", () => {
-  const name = reelFileName({ direction: "received", sentAt: Date.UTC(2026, 9, 30, 14, 5, 9), shortcode: "Cabc123", itemId: "i1" });
+  const name = reelFileName({ direction: "received", sentAt: Date.UTC(2026, 9, 30, 14, 5, 9), shortcode: "Cabc123" });
   assert.equal(name, "recebidos/2026-10-30_14-05-09_Cabc123.mp4");
-});
-
-test("reelFileName sanitizes shortcodes and falls back to the item id", () => {
-  const name = reelFileName({ direction: "sent", sentAt: 0, shortcode: null, itemId: "a/b" });
-  assert.equal(name, "enviados/1970-01-01_00-00-00_a_b.mp4");
 });

@@ -29,7 +29,7 @@ Load `src/` via `chrome://extensions` → Developer mode → Load unpacked, and 
 
 ## Reporting an API change
 
-Include the error message from the export page and, if you can, the shape of the failing item (DevTools → Network → `direct_v2/threads`). **Remove names, ids, text and URLs** before posting.
+Include the error message from the export page and, if you can, the shape of the failing item (DevTools → Network → filter `graphql`, response containing `slide_messages`). **Remove names, ids, text and URLs** before posting.
 
 ## Translations
 

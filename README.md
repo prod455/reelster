@@ -43,37 +43,44 @@ Works in Chrome, Edge, Brave, Opera and any Chromium ≥ 116.
 
 1. Open [instagram.com/direct](https://www.instagram.com/direct/inbox/) and click the conversation.
 2. Click the Reelster icon → **Export Reels from this conversation**.
-3. Keep both tabs open. When it finishes, the `.tar.gz` is saved by your browser.
+3. The Instagram tab reloads and scrolls up by itself to the start of the chat. Keep both tabs open; press **Stop and download now** if you only want the recent part.
+4. When it finishes, the `.tar.gz` is saved by your browser.
 
 Extract with `tar -xzf reelster-*.tar.gz` (macOS/Linux) or `tar -xzf` in Windows Terminal / 7-Zip.
 
 ## How it works
 
+Instagram's web app no longer exposes the old `/api/v1/direct_v2/` endpoints (removed in October 2026); DMs now load through GraphQL queries whose ids rotate. So Reelster does not build its own DM requests. It **listens to what the Instagram tab already loads**:
+
 ```
-popup ──opens──▶ export page ──chrome.scripting──▶ Instagram tab: fetch /api/v1/direct_v2/…  (your session)
-                     │
-                     ├─ pages through the whole thread, finds Reels (clip, media_share, xma_clip)
-                     ├─ resolves missing video URLs via /api/v1/media/<id>/info/
+popup ──opens──▶ export page
+                     ├─ reloads the Instagram tab; hook.js (page world) copies every GraphQL body with `slide_messages`
+                     ├─ scrolls the message list to the top until no new messages arrive (or you press "Stop")
+                     ├─ keeps only messages of the open chat, finds Reels (inline clips, shared reel cards, pasted reel links)
+                     ├─ resolves each video: inline URL → Instagram's post query → the reel page's embedded JSON
                      ├─ downloads each video from the CDN, one at a time
                      └─ streams them into a ustar archive ─▶ CompressionStream("gzip") ─▶ download
 ```
 
 | File | Responsibility |
 | --- | --- |
-| [`src/lib/thread.js`](src/lib/thread.js) | Thread id resolution and pagination over the Direct API |
-| [`src/lib/reels.js`](src/lib/reels.js) | Pure extraction of Reels from thread items, file naming |
-| [`src/lib/exporter.js`](src/lib/exporter.js) | Orchestration, deduplication, `manifest.json` |
+| [`src/hook.js`](src/hook.js) | Copies Direct GraphQL responses in the Instagram tab (read-only) |
+| [`src/lib/messages.js`](src/lib/messages.js) | Shape-agnostic parsing of `slide_messages` for the open chat |
+| [`src/lib/reels.js`](src/lib/reels.js) | Finds Reels in messages, direction, dedup, file naming |
+| [`src/lib/exporter.js`](src/lib/exporter.js) | Download loop and `manifest.json` |
 | [`src/lib/tar.js`](src/lib/tar.js) | Streaming ustar writer + gzip, ~70 lines, no deps |
-| [`src/export.js`](src/export.js) | Browser glue: authenticated requests, retries on HTTP 429, saving |
+| [`src/export.js`](src/export.js) | Browser glue: scrolling, video resolution, saving |
 
 ### Privacy and permissions
 
 | Permission | Why |
 | --- | --- |
-| `scripting` + `www.instagram.com` | Run the Direct API requests inside your logged-in Instagram tab |
+| Content script on `www.instagram.com` | Read the DM responses Instagram already loads |
+| `scripting` | Scroll the chat and resolve video URLs inside your logged-in tab |
+| `cookies` | Read `ds_user_id` (your own user id) to tell sent from received |
 | `*.cdninstagram.com`, `*.fbcdn.net` | Download the video files |
 
-No analytics, no remote servers, no storage. Your session cookies are never read by the extension; requests run inside the Instagram tab itself.
+No analytics, no remote servers, no storage.
 
 ## Development
 
@@ -90,8 +97,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Limitations
 
-- Relies on Instagram's private web API, which can change without notice. If an export breaks, [open an issue](https://github.com/prod455/reelster/issues/new/choose) with the error shown.
-- Very long conversations take a while: pages are fetched with a small delay to avoid rate limits.
+- Relies on Instagram's web app internals, which change without notice. If an export breaks, [open an issue](https://github.com/prod455/reelster/issues/new/choose) with the error shown.
+- Very long conversations take a while: Instagram loads about 20 messages per scroll.
 - The archive is assembled in memory (Chrome spills large blobs to disk), so hundreds of Reels need some free disk space.
 
 ## Disclaimer

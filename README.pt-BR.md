@@ -32,7 +32,8 @@ Um `.mp4` por Reel, na maior resolução disponível, nomeado `<data UTC>_<hora>
 
 1. Abra [instagram.com/direct](https://www.instagram.com/direct/inbox/) e entre na conversa.
 2. Clique no ícone do Reelster → **Exportar Reels desta conversa**.
-3. Deixe as duas abas abertas. No fim, o navegador salva o `.tar.gz`.
+3. A aba do Instagram recarrega e rola sozinha até o começo da conversa. Deixe as duas abas abertas; se quiser só a parte recente, clique em **Parar e baixar agora**.
+4. No fim, o navegador salva o `.tar.gz`.
 
 ## Desenvolvimento
 
