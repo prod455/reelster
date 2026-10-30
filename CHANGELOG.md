@@ -2,6 +2,15 @@
 
 All notable changes are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] - 2026-10-30
+
+### Fixed
+- Every Reel failed to download on real accounts. The post query now sends the same variables and headers as Instagram's web app, `/api/v1/media/<id>/info/` is tried as a second lookup, and the reel page as a third.
+- When the CDN refuses the extension's request, the video is downloaded through the Instagram tab instead.
+
+### Added
+- The export page lists why Reels failed, grouped by reason.
+
 ## [1.1.0] - 2026-10-30
 
 ### Fixed

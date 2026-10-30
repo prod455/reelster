@@ -1,5 +1,21 @@
 // Pure functions that find Reels in Direct message nodes.
 
+import { parseBodies } from "./messages.js";
+
+const SHORTCODE_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
+/** Converts a post shortcode (as in /reel/<code>/) to its numeric media id. */
+export function shortcodeToMediaId(shortcode) {
+  // Private posts append extra characters after the 11-char id.
+  let id = 0n;
+  for (const char of shortcode.slice(0, 11)) {
+    const digit = SHORTCODE_ALPHABET.indexOf(char);
+    if (digit < 0) throw new Error(`invalid shortcode: ${shortcode}`);
+    id = id * 64n + BigInt(digit);
+  }
+  return id.toString();
+}
+
 // /reel/<code>, /reels/<code> on instagram.com. Feed posts (/p/) are not Reels.
 const REEL_URL = /instagram\.com\/reels?\/([A-Za-z0-9_-]+)/;
 
@@ -74,6 +90,31 @@ export function findVideoForShortcode(root, shortcode) {
     if (obj.code === shortcode && obj.video_versions?.length) return pickBestVideo(obj.video_versions);
   }
   return null;
+}
+
+/**
+ * Picks the video from the responses of several lookups
+ * (`{ name, status, text, error? }`), in order. Throws an error naming why
+ * each lookup failed.
+ */
+export function videoFromSources(sources, shortcode) {
+  const reasons = [];
+  for (const { name, status, text, error } of sources) {
+    if (error) {
+      reasons.push(`${name}: ${error}`);
+      continue;
+    }
+    if (status < 200 || status >= 300) {
+      reasons.push(`${name}: HTTP ${status}`);
+      continue;
+    }
+    for (const doc of parseBodies(text)) {
+      const url = findVideoForShortcode(doc, shortcode);
+      if (url) return url;
+    }
+    reasons.push(`${name}: no video in response`);
+  }
+  throw new Error(reasons.join("; "));
 }
 
 const FOLDER = { sent: "enviados", received: "recebidos" };

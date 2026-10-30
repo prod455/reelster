@@ -45,3 +45,10 @@ export async function* archiveEntries({ reels, resolveVideo, fetchVideo, threadI
   };
   yield { name: "manifest.json", data: encoder.encode(JSON.stringify(manifest, null, 2)), mtime: new Date() };
 }
+
+/** Distinct failure reasons with how many reels hit each, most frequent first. */
+export function failureSummary(failed) {
+  const counts = new Map();
+  for (const { error } of failed) counts.set(error, (counts.get(error) ?? 0) + 1);
+  return [...counts].map(([error, count]) => ({ error, count })).sort((a, b) => b.count - a.count);
+}

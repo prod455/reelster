@@ -53,3 +53,11 @@ test("archiveEntries records failures in the manifest and keeps going", async ()
   assert.equal(manifest.failed[0].shortcode, "GONE");
   assert.match(manifest.failed[0].error, /media gone/);
 });
+
+test("failureSummary groups identical errors, most frequent first", async () => {
+  const { failureSummary } = await import("../src/lib/exporter.js");
+  assert.deepEqual(failureSummary([{ error: "a" }, { error: "b" }, { error: "b" }]), [
+    { error: "b", count: 2 },
+    { error: "a", count: 1 },
+  ]);
+});

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { extractReel, reelsFromMessages, pickBestVideo, findVideoForShortcode, reelFileName } from "../src/lib/reels.js";
+import { extractReel, reelsFromMessages, pickBestVideo, findVideoForShortcode, reelFileName, shortcodeToMediaId, videoFromSources } from "../src/lib/reels.js";
 
 const VIEWER = "2001";
 const OTHER = "2002";
@@ -95,4 +95,34 @@ test("findVideoForShortcode finds the media object with that code anywhere in a 
 test("reelFileName groups by direction and is sortable by date", () => {
   const name = reelFileName({ direction: "received", sentAt: Date.UTC(2026, 9, 30, 14, 5, 9), shortcode: "Cabc123" });
   assert.equal(name, "recebidos/2026-10-30_14-05-09_Cabc123.mp4");
+});
+
+test("shortcodeToMediaId decodes Instagram base64 shortcodes", () => {
+  assert.equal(shortcodeToMediaId("B"), "1");
+  assert.equal(shortcodeToMediaId("BA"), "64");
+  assert.equal(shortcodeToMediaId("_"), "63");
+});
+
+test("shortcodeToMediaId ignores the private-post suffix beyond 11 chars", () => {
+  assert.equal(shortcodeToMediaId("BAAAAAAAAAAxyz"), shortcodeToMediaId("BAAAAAAAAAA"));
+});
+
+test("videoFromSources returns the first source that has the video", () => {
+  const sources = [
+    { name: "graphql", status: 200, text: '{"data":null}' },
+    { name: "info", status: 200, text: '{"items":[{"code":"AB","video_versions":[{"url":"v","width":1,"height":1}]}]}' },
+  ];
+  assert.equal(videoFromSources(sources, "AB"), "v");
+});
+
+test("videoFromSources explains every failed attempt", () => {
+  const sources = [
+    { name: "graphql", status: 200, text: '{"errors":[{"message":"bad"}]}' },
+    { name: "info", status: 404, text: "" },
+    { name: "html", status: 0, text: "", error: "TypeError: Failed to fetch" },
+  ];
+  assert.throws(() => videoFromSources(sources, "AB"), (error) => {
+    assert.equal(error.message, "graphql: no video in response; info: HTTP 404; html: TypeError: Failed to fetch");
+    return true;
+  });
 });

@@ -1,6 +1,6 @@
 import { messagesForThread, parseBodies } from "./lib/messages.js";
-import { findVideoForShortcode, reelsFromMessages } from "./lib/reels.js";
-import { archiveEntries } from "./lib/exporter.js";
+import { reelsFromMessages, shortcodeToMediaId, videoFromSources } from "./lib/reels.js";
+import { archiveEntries, failureSummary } from "./lib/exporter.js";
 import { tarGzStream } from "./lib/tar.js";
 
 const t = (key, ...subs) => chrome.i18n.getMessage(key, subs.map(String));
@@ -8,6 +8,7 @@ const statusEl = document.getElementById("status");
 const progressEl = document.getElementById("progress");
 const stopButton = document.getElementById("stop");
 const saveButton = document.getElementById("save");
+const failuresEl = document.getElementById("failures");
 document.getElementById("title").textContent = t("exportTitle");
 document.getElementById("keep-open").textContent = t("keepOpen");
 stopButton.textContent = t("stopNow");
@@ -57,45 +58,74 @@ function drainAndScroll() {
   return { bodies, hasHook: Array.isArray(window.__reelsterBodies), foundList: Boolean(list) };
 }
 
-async function fetchPostSources(shortcode, docId) {
+// Asks Instagram for a reel's media in three independent ways and returns
+// every raw answer; the extension side picks the video (videoFromSources).
+async function fetchVideoSources(shortcode, mediaId, docId) {
   const csrf = /(?:^|;\s*)csrftoken=([^;]+)/.exec(document.cookie)?.[1] ?? "";
   let dtsg = "";
   for (const script of document.scripts) {
     const match = /"DTSGInitialData",\[\],\{"token":"([^"]+)"/.exec(script.textContent) ?? /"dtsg":\s*\{\s*"token":"([^"]+)"/.exec(script.textContent);
     if (match) { dtsg = match[1]; break; }
   }
-  const sources = [];
-  try {
-    const response = await fetch("/graphql/query", {
+  const headers = {
+    "x-csrftoken": csrf,
+    "x-ig-app-id": "936619743392459",
+    "x-ig-www-claim": sessionStorage.getItem("www-claim-v2") ?? "0",
+    "x-requested-with": "XMLHttpRequest",
+  };
+  async function attempt(name, url, init, read = (r) => r.text()) {
+    try {
+      const response = await fetch(url, { credentials: "include", ...init });
+      return { name, status: response.status, text: response.ok ? await read(response) : "" };
+    } catch (error) {
+      return { name, status: 0, text: "", error: String(error) };
+    }
+  }
+  return [
+    await attempt("graphql", "/graphql/query", {
       method: "POST",
-      credentials: "include",
-      headers: {
-        "content-type": "application/x-www-form-urlencoded",
-        "x-csrftoken": csrf,
-        "x-ig-app-id": "936619743392459",
-        "x-fb-friendly-name": "PolarisPostRootQuery",
-      },
+      headers: { ...headers, "content-type": "application/x-www-form-urlencoded", "x-fb-friendly-name": "PolarisPostRootQuery" },
       body: new URLSearchParams({
         fb_dtsg: dtsg,
         fb_api_caller_class: "RelayModern",
         fb_api_req_friendly_name: "PolarisPostRootQuery",
         doc_id: docId,
-        variables: JSON.stringify({ shortcode }),
+        variables: JSON.stringify({
+          shortcode,
+          __relay_internal__pv__PolarisShortDramaEnabledrelayprovider: false,
+          __relay_internal__pv__PolarisMultiCaptionCarouselEnabledrelayprovider: false,
+        }),
         server_timestamps: "true",
       }),
-    });
-    if (response.ok) sources.push(await response.text());
-  } catch {}
-  try {
-    const response = await fetch(`/reel/${shortcode}/`, { credentials: "include" });
-    if (response.ok) {
+    }),
+    await attempt("info", `/api/v1/media/${mediaId}/info/`, { headers }),
+    await attempt("html", `/reel/${shortcode}/`, {}, async (response) => {
+      // The reel page embeds its media as JSON; keep only those scripts.
       const html = new DOMParser().parseFromString(await response.text(), "text/html");
-      for (const script of html.querySelectorAll('script[type="application/json"]')) {
-        if (script.textContent.includes(shortcode)) sources.push(script.textContent);
-      }
-    }
-  } catch {}
-  return sources;
+      return [...html.querySelectorAll('script[type="application/json"]')]
+        .map((s) => s.textContent)
+        .filter((text) => text.includes(shortcode))
+        .join("\n");
+    }),
+  ];
+}
+
+// Downloads a video with the Instagram page's own origin and returns it as a
+// data: URL. Fallback for when the CDN refuses the extension's request.
+async function fetchVideoInTab(url) {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return { error: `HTTP ${response.status}` };
+    const blob = await response.blob();
+    return await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve({ dataUrl: reader.result });
+      reader.onerror = () => resolve({ error: String(reader.error) });
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) {
+    return { error: String(error) };
+  }
 }
 
 // --- Extension side.
@@ -144,19 +174,26 @@ async function readWholeThread(viewer) {
 
 async function resolveVideo(reel) {
   await sleep(RESOLVE_DELAY_MS);
-  for (const source of await inTab(fetchPostSources, reel.shortcode, POST_QUERY_DOC_ID)) {
-    for (const doc of parseBodies(source)) {
-      const url = findVideoForShortcode(doc, reel.shortcode);
-      if (url) return url;
-    }
+  const sources = await inTab(fetchVideoSources, reel.shortcode, shortcodeToMediaId(reel.shortcode), POST_QUERY_DOC_ID);
+  try {
+    return videoFromSources(sources, reel.shortcode);
+  } catch (error) {
+    throw new Error(`${t("videoNotFound")} [${error.message}]`);
   }
-  throw new Error(t("videoNotFound"));
 }
 
 async function fetchVideo(url) {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`HTTP ${response.status} downloading video`);
-  return new Uint8Array(await response.arrayBuffer());
+  let direct;
+  try {
+    const response = await fetch(url);
+    if (response.ok) return new Uint8Array(await response.arrayBuffer());
+    direct = `HTTP ${response.status}`;
+  } catch (error) {
+    direct = String(error);
+  }
+  const { dataUrl, error } = await inTab(fetchVideoInTab, url);
+  if (error) throw new Error(`video download failed [extension: ${direct}; tab: ${error}]`);
+  return new Uint8Array(await (await fetch(dataUrl)).arrayBuffer());
 }
 
 function onProgress({ done, total }) {
@@ -200,6 +237,9 @@ async function run() {
   saveButton.onclick = () => save(blob, filename);
   const { sent, received, failed } = manifest.totals;
   statusEl.textContent = t("done", sent, received, failed);
+  for (const { error, count } of failureSummary(manifest.failed)) {
+    failuresEl.append(Object.assign(document.createElement("li"), { textContent: `${count}× ${error}` }));
+  }
 }
 
 run().catch((error) => {

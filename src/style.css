@@ -46,3 +46,4 @@ progress { width: 100%; height: 8px; accent-color: var(--accent); }
 .status { margin: 16px 0 8px; color: var(--fg); }
 .error { color: var(--danger); }
 button + button { margin-top: 8px; }
+.failures { margin: 0 0 12px; padding-left: 20px; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }

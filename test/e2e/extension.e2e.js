@@ -45,6 +45,7 @@ const older = page([
   message("m2", FRIEND, Date.UTC(2023, 6, 22, 4, 26, 41), xma("https://www.instagram.com/reel/HT/?igsh=x")),
   message("m1", FRIEND, Date.UTC(2023, 6, 22, 4, 26, 42), xma("https://www.instagram.com/reel/GONE/")),
   message("m0", FRIEND, Date.UTC(2023, 6, 22, 4, 26, 43), xma("https://www.instagram.com/p/FEEDPOST/")),
+  message("m-1", VIEWER, Date.UTC(2023, 6, 22, 4, 26, 44), xma("https://www.instagram.com/reel/IN/")),
 ]);
 // Another chat preloaded by the inbox: must not be exported.
 const otherChat = { data: { inbox: { id: "777", slide_messages: { edges: [{ node: message("x1", FRIEND, 1, xma("https://www.instagram.com/reel/NOPE/")) }] } } } };
@@ -94,10 +95,19 @@ test("exports sent and received reels of a DM thread into a .tar.gz", { timeout:
         const items = shortcode === "BA" ? [{ code: "BA", video_versions: [{ url: `${CDN}/ba.mp4`, width: 1, height: 1 }] }] : [];
         return route.fulfill({ json: { data: { xdt_api__v1__media__shortcode__web_info: { items } } } });
       }
+      if (url.pathname === "/api/v1/media/525/info/") { // shortcode IN
+        return route.fulfill({ json: { items: [{ code: "IN", video_versions: [{ url: `${CDN}/tab-only.mp4`, width: 1, height: 1 }] }] } });
+      }
       if (url.pathname === "/reel/HT/") return route.fulfill({ contentType: "text/html", body: reelHtml("HT", `${CDN}/ht.mp4`) });
       return route.fulfill({ status: 404 });
     });
-    await context.route(`${CDN}/**`, (route) => route.fulfill({ body: `video ${new URL(route.request().url()).pathname}` }));
+    await context.route(`${CDN}/**`, (route) => {
+      const { pathname } = new URL(route.request().url());
+      const origin = route.request().headers().origin ?? "";
+      // This file is only served to the Instagram page, like a CDN that refuses foreign origins.
+      if (pathname === "/v/tab-only.mp4" && !origin.startsWith("https://www.instagram.com")) return route.fulfill({ status: 403 });
+      return route.fulfill({ body: `video ${pathname}`, headers: { "access-control-allow-origin": "https://www.instagram.com" } });
+    });
 
     const instagram = await context.newPage();
     await instagram.goto("https://www.instagram.com/direct/t/555/");
@@ -119,6 +129,7 @@ test("exports sent and received reels of a DM thread into a .tar.gz", { timeout:
     const files = execFileSync("tar", ["-tzf", archive]).toString().trim().split("\n").sort();
     assert.deepEqual(files, [
       "enviados/2023-07-22_04-26-40_BA.mp4",
+      "enviados/2023-07-22_04-26-44_IN.mp4",
       "manifest.json",
       "recebidos/2023-07-22_04-26-41_HT.mp4",
       "recebidos/2023-11-14_22-13-20_Cabc.mp4",
@@ -127,8 +138,11 @@ test("exports sent and received reels of a DM thread into a .tar.gz", { timeout:
     assert.equal(readFileSync(join(out, "enviados/2023-07-22_04-26-40_BA.mp4"), "utf8"), "video /v/ba.mp4");
     assert.equal(readFileSync(join(out, "recebidos/2023-07-22_04-26-41_HT.mp4"), "utf8"), "video /v/ht.mp4");
     const manifest = JSON.parse(readFileSync(join(out, "manifest.json"), "utf8"));
-    assert.deepEqual(manifest.totals, { sent: 1, received: 2, failed: 1 });
+    assert.equal(readFileSync(join(out, "enviados/2023-07-22_04-26-44_IN.mp4"), "utf8"), "video /v/tab-only.mp4");
+    assert.deepEqual(manifest.totals, { sent: 2, received: 2, failed: 1 });
     assert.equal(manifest.failed[0].shortcode, "GONE");
+    assert.match(manifest.failed[0].error, /graphql: no video in response; info: HTTP 404; html: HTTP 404/);
+    assert.match(await exporter.textContent("#failures"), /^1× .*graphql: no video in response/);
   } finally {
     await context.close();
   }
