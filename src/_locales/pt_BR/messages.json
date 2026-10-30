@@ -1,0 +1,91 @@
+{
+  "extName": {
+    "message": "Reelster — exporte Reels das DMs do Instagram"
+  },
+  "extDescription": {
+    "message": "Baixe todos os Reels enviados e recebidos numa conversa do Instagram Direct em um único .tar.gz."
+  },
+  "popupHint": {
+    "message": "Abra uma conversa em instagram.com/direct e clique no botão."
+  },
+  "popupNotThread": {
+    "message": "Esta aba não é uma conversa do Instagram Direct."
+  },
+  "popupExport": {
+    "message": "Exportar Reels desta conversa"
+  },
+  "exportTitle": {
+    "message": "Exportando Reels"
+  },
+  "keepOpen": {
+    "message": "Deixe esta aba e a do Instagram abertas. A aba do Instagram vai rolar sozinha até o começo da conversa."
+  },
+  "stepScan": {
+    "message": "Lendo a conversa (rolando pra cima): $MESSAGES$ mensagens, $REELS$ Reels",
+    "placeholders": {
+      "messages": {
+        "content": "$1"
+      },
+      "reels": {
+        "content": "$2"
+      }
+    }
+  },
+  "stepDownload": {
+    "message": "Baixando vídeos: $DONE$ de $TOTAL$",
+    "placeholders": {
+      "done": {
+        "content": "$1"
+      },
+      "total": {
+        "content": "$2"
+      }
+    }
+  },
+  "stepCompress": {
+    "message": "Montando o .tar.gz…"
+  },
+  "done": {
+    "message": "Pronto: $SENT$ enviados, $RECEIVED$ recebidos, $FAILED$ com falha. O download começou.",
+    "placeholders": {
+      "sent": {
+        "content": "$1"
+      },
+      "received": {
+        "content": "$2"
+      },
+      "failed": {
+        "content": "$3"
+      }
+    }
+  },
+  "noReels": {
+    "message": "Nenhum Reel encontrado nesta conversa."
+  },
+  "saveAgain": {
+    "message": "Salvar de novo"
+  },
+  "error": {
+    "message": "Erro: $MESSAGE$",
+    "placeholders": {
+      "message": {
+        "content": "$1"
+      }
+    }
+  },
+  "stepReload": {
+    "message": "Recarregando a conversa…"
+  },
+  "stopNow": {
+    "message": "Parar e baixar agora"
+  },
+  "notLoggedIn": {
+    "message": "Você não está logado no instagram.com neste navegador."
+  },
+  "noMessages": {
+    "message": "Não consegui ler nenhuma mensagem desta conversa. Confira se ela está aberta na aba do Instagram e tente de novo."
+  },
+  "videoNotFound": {
+    "message": "vídeo não encontrado (apagado, conta privada ou o Instagram mudou o formato)"
+  }
+}

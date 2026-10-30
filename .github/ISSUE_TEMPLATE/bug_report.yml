@@ -1,0 +1,31 @@
+name: Bug report
+description: The export failed or produced a wrong archive
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Include the exact error shown on the export page.
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      placeholder: Chrome 131 on Windows 11
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Reelster version
+      placeholder: 1.0.0
+    validations:
+      required: true
+  - type: textarea
+    id: shape
+    attributes:
+      label: Failing item shape (optional)
+      description: From DevTools → Network → graphql (response with slide_messages). Remove names, ids, text and URLs first.
+      render: json
