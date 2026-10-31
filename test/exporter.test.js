@@ -61,3 +61,11 @@ test("failureSummary groups identical errors, most frequent first", async () => 
     { error: "a", count: 1 },
   ]);
 });
+
+test("archiveEntries records the export period in the manifest", async () => {
+  const entries = await drain(archiveEntries({
+    reels: [], resolveVideo: async () => "", fetchVideo: async () => new Uint8Array(), threadId: "t",
+    period: { from: Date.UTC(2026, 0, 1), to: null }, onProgress() {},
+  }));
+  assert.deepEqual(JSON.parse(decode(entries[0].data)).period, { from: "2026-01-01T00:00:00.000Z", to: null });
+});

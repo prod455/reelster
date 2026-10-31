@@ -34,6 +34,8 @@
       this.addEventListener("load", () => {
         if (this.responseType === "" || this.responseType === "text") keep(this.responseText);
         else if (this.responseType === "json") keep(JSON.stringify(this.response));
+        else if (this.responseType === "arraybuffer") keep(new TextDecoder().decode(this.response));
+        else if (this.responseType === "blob") this.response.text().then(keep, () => {});
       });
     }
     return originalSend.apply(this, arguments);

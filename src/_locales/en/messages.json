@@ -18,7 +18,7 @@
     "message": "Exporting Reels"
   },
   "keepOpen": {
-    "message": "Keep this tab and the Instagram tab open. The Instagram tab will scroll by itself to the start of the conversation."
+    "message": "Keep this window and the Instagram tab open. The Instagram tab reloads and scrolls by itself to the start of the conversation (or of the period)."
   },
   "stepScan": {
     "message": "Reading the conversation (scrolling up): $MESSAGES$ messages, $REELS$ Reels",
@@ -87,5 +87,20 @@
   },
   "videoNotFound": {
     "message": "video not found (deleted, private account or Instagram changed its format)"
+  },
+  "periodLegend": {
+    "message": "Period (optional)"
+  },
+  "periodFrom": {
+    "message": "From"
+  },
+  "periodTo": {
+    "message": "To"
+  },
+  "periodHint": {
+    "message": "Leave both empty to export the whole conversation. With a start date, reading stops as soon as it reaches that day."
+  },
+  "start": {
+    "message": "Start export"
   }
 }
