@@ -29,17 +29,22 @@ const message = (id, igid, ts, content) => ({
   sender: { id: `fb${igid}`, igid, user_dict: { id: igid } },
 });
 const xma = (url) => ({ __typename: "SlideMessageXMA", target_url: url });
-const page = (messages) => ({
-  data: { fetch__SlideThread: { as_ig_direct_thread: { id: "555", slide_messages: { edges: messages.map((node) => ({ node })) } } } },
+// The first page names the chat by its URL id; older pages only by its internal id.
+const page = (messages, id = "fb-555") => ({
+  data: { fetch__SlideThread: { as_ig_direct_thread: { id, slide_messages: { edges: messages.map((node) => ({ node })) } } } },
 });
 
 const newest = page([
-  message("m5", FRIEND, Date.UTC(2023, 10, 14, 22, 13, 20), { __typename: "SlideMessageText", text_body: "oi" }),
+  message("m6", VIEWER, Date.UTC(2023, 10, 15, 10, 0, 0), {
+    __typename: "SlideMessageXMA",
+    media: { code: "INLINEPOST", product_type: "feed", image_versions2: { candidates: [{ url: `${CDN}/inline-post.jpg`, width: 1080, height: 1080 }] } },
+  }),
+  message("m5", FRIEND, Date.UTC(2023, 10, 14, 22, 13, 20), { __typename: "SlideMessageText", text_body: "oi tudo bem" }),
   message("m4", FRIEND, Date.UTC(2023, 10, 14, 22, 13, 20), {
     __typename: "SlideMessageClip",
     clip: { code: "Cabc", product_type: "clips", video_versions: [{ url: `${CDN}/inline.mp4`, width: 720, height: 1280 }] },
   }),
-]);
+], "555");
 const older = page([
   message("m3", VIEWER, Date.UTC(2023, 6, 22, 4, 26, 40), xma("https://www.instagram.com/reel/BA/")),
   message("m2", FRIEND, Date.UTC(2023, 6, 22, 4, 26, 41), xma("https://www.instagram.com/reel/HT/?igsh=x")),
@@ -60,13 +65,14 @@ const bulkFiles = Array.from({ length: BULK_PAGES }, (_, n) => Array.from({ leng
   `${i % 2 ? "enviados" : "recebidos"}/2022-${String(n + 1).padStart(2, "0")}-${String(1 + i).padStart(2, "0")}_00-00-00_BULK${n}x${String(i).padStart(2, "0")}.mp4`)).flat();
 
 // Another chat preloaded by the inbox: must not be exported.
-const otherChat = { data: { inbox: { id: "777", slide_messages: { edges: [{ node: message("x1", FRIEND, 1, xma("https://www.instagram.com/reel/NOPE/")) }] } } } };
+const otherChat = { data: { inbox: { id: "777", slide_messages: { edges: [{ node: { ...message("x1", FRIEND, 1, xma("https://www.instagram.com/reel/NOPE/")), thread_fbid: "fb-777" } }] } } } };
 
 const dmPage = `<!doctype html>
 <script type="application/json">${JSON.stringify(newest)}</script>
 <script type="application/json">${JSON.stringify(otherChat)}</script>
 <div style="position:fixed;left:0;width:300px;height:600px;overflow-y:auto"><div style="height:2000px">inbox</div></div>
-<div id="list" style="position:fixed;left:400px;width:400px;height:600px;overflow-y:auto"><div style="height:3000px">chat</div></div>
+<div id="list" style="position:fixed;left:400px;width:400px;height:600px;overflow-y:auto"><div style="height:3000px">chat<p>oi tudo bem</p></div></div>
+<div style="position:fixed;left:900px;width:200px;height:600px;overflow-y:auto"><div style="height:3000px">decoy: not the chat</div></div>
 <script>
   const list = document.getElementById("list");
   list.scrollTop = list.scrollHeight;
@@ -113,7 +119,13 @@ async function runExport({ from = "", to = "" } = {}) {
       }
       if (url.pathname === "/graphql/query") {
         const { shortcode } = JSON.parse(new URLSearchParams(request.postData()).get("variables"));
-        const items = shortcode === "BA" ? [{ code: "BA", video_versions: [{ url: `${CDN}/ba.mp4`, width: 1, height: 1 }] }] : [];
+        const items = {
+          BA: [{ code: "BA", video_versions: [{ url: `${CDN}/ba.mp4`, width: 1, height: 1 }] }],
+          FEEDPOST: [{ code: "FEEDPOST", carousel_media: [
+            { image_versions2: { candidates: [{ url: `${CDN}/fp1-small.jpg`, width: 320, height: 320 }, { url: `${CDN}/fp1.jpg`, width: 1080, height: 1080 }] } },
+            { image_versions2: { candidates: [{ url: `${CDN}/fp2.jpg`, width: 1080, height: 1080 }] } },
+          ] }],
+        }[shortcode] ?? [];
         return route.fulfill({ json: { data: { xdt_api__v1__media__shortcode__web_info: { items } } } });
       }
       if (url.pathname === "/api/v1/media/525/info/") { // shortcode IN
@@ -165,24 +177,34 @@ test("exports sent and received reels of a DM thread into a .tar.gz", { timeout:
     "enviados/2023-07-22_04-26-40_BA.mp4",
     "enviados/2023-07-22_04-26-44_IN.mp4",
     "manifest.json",
+    "enviados/posts/2023-11-15_10-00-00_INLINEPOST_1.jpg",
     "recebidos/2023-07-22_04-26-41_HT.mp4",
     "recebidos/2023-11-14_22-13-20_Cabc.mp4",
+    "recebidos/posts/2023-07-22_04-26-43_FEEDPOST_1.jpg",
+    "recebidos/posts/2023-07-22_04-26-43_FEEDPOST_2.jpg",
     ...bulkFiles,
   ].sort());
   assert.equal(read("recebidos/2023-11-14_22-13-20_Cabc.mp4"), "video /v/inline.mp4");
   assert.equal(read("enviados/2023-07-22_04-26-40_BA.mp4"), "video /v/ba.mp4");
   assert.equal(read("recebidos/2023-07-22_04-26-41_HT.mp4"), "video /v/ht.mp4");
   assert.equal(read("enviados/2023-07-22_04-26-44_IN.mp4"), "video /v/tab-only.mp4");
-  assert.deepEqual(manifest.totals, { sent: 2 + 18, received: 2 + 18, failed: 1 });
+  assert.equal(read("recebidos/posts/2023-07-22_04-26-43_FEEDPOST_1.jpg"), "video /v/fp1.jpg");
+  assert.equal(read("enviados/posts/2023-11-15_10-00-00_INLINEPOST_1.jpg"), "video /v/inline-post.jpg");
+  assert.deepEqual(manifest.totals, {
+    reels: { sent: 2 + 18, received: 2 + 18 },
+    posts: { sent: 1, received: 1 },
+    post_files: 3,
+    failed: 1,
+  });
   assert.equal(manifest.failed[0].shortcode, "GONE");
-  assert.match(manifest.failed[0].error, /graphql: no video in response; info: HTTP 404; html: HTTP 404/);
-  assert.match(failuresText, /^1× .*graphql: no video in response/);
+  assert.match(manifest.failed[0].error, /graphql: no media in response; info: HTTP 404; html: HTTP 404/);
+  assert.match(failuresText, /^1× .*graphql: no media in response/);
   assert.deepEqual(manifest.period, { from: null, to: null });
 });
 
 test("exports only the reels inside the chosen period", { timeout: 120_000 }, async () => {
   const { files, manifest } = await runExport({ from: "2023-11-01", to: "2023-11-30" });
-  assert.deepEqual(files, ["manifest.json", "recebidos/2023-11-14_22-13-20_Cabc.mp4"]);
-  assert.deepEqual(manifest.totals, { sent: 0, received: 1, failed: 0 });
+  assert.deepEqual(files, ["enviados/posts/2023-11-15_10-00-00_INLINEPOST_1.jpg", "manifest.json", "recebidos/2023-11-14_22-13-20_Cabc.mp4"]);
+  assert.deepEqual(manifest.totals, { reels: { sent: 0, received: 1 }, posts: { sent: 1, received: 0 }, post_files: 1, failed: 0 });
   assert.notEqual(manifest.period.from, null);
 });

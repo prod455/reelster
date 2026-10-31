@@ -2,6 +2,18 @@
 
 All notable changes are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [1.4.0] - 2026-10-31
+
+### Added
+- Shared posts are exported too: every photo (and carousel video) of each post goes to `enviados/posts/` or `recebidos/posts/`, numbered `<date>_<time>_<shortcode>_<n>.jpg`.
+- The export window shows how many responses were captured and whether the message list was found, and asks you to scroll the Instagram tab yourself when it cannot.
+
+### Fixed
+- Reading stopped at the first ~20 messages. Older pages that name the chat only by its internal id are now matched (the chat's ids are learned from the first page), and the message list to scroll is located through the text of messages already read instead of a layout guess, with wheel input as well.
+
+### Changed
+- `manifest.json`: `reels` became `items` (with `kind` and `files`); `totals` now splits `reels` and `posts` and adds `post_files`.
+
 ## [1.3.0] - 2026-10-31
 
 ### Fixed

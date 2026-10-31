@@ -3,7 +3,7 @@
     "message": "Reelster — export Reels from Instagram DMs"
   },
   "extDescription": {
-    "message": "Download every Reel sent and received in an Instagram DM conversation as a single .tar.gz."
+    "message": "Download every Reel and post sent and received in an Instagram DM conversation as a single .tar.gz."
   },
   "popupHint": {
     "message": "Open a conversation at instagram.com/direct and click the button."
@@ -12,22 +12,25 @@
     "message": "This tab is not an Instagram DM conversation."
   },
   "popupExport": {
-    "message": "Export Reels from this conversation"
+    "message": "Export Reels and posts from this conversation"
   },
   "exportTitle": {
-    "message": "Exporting Reels"
+    "message": "Exporting Reels and posts"
   },
   "keepOpen": {
     "message": "Keep this window and the Instagram tab open. The Instagram tab reloads and scrolls by itself to the start of the conversation (or of the period)."
   },
   "stepScan": {
-    "message": "Reading the conversation (scrolling up): $MESSAGES$ messages, $REELS$ Reels",
+    "message": "Reading the conversation: $MESSAGES$ messages, $REELS$ Reels, $POSTS$ posts",
     "placeholders": {
       "messages": {
         "content": "$1"
       },
       "reels": {
         "content": "$2"
+      },
+      "posts": {
+        "content": "$3"
       }
     }
   },
@@ -46,21 +49,21 @@
     "message": "Building the .tar.gz…"
   },
   "done": {
-    "message": "Done: $SENT$ sent, $RECEIVED$ received, $FAILED$ failed. The download has started.",
+    "message": "Done: $REELS$ Reels and $POSTS$ posts ($FILES$ files), $FAILED$ failed. The download has started.",
     "placeholders": {
-      "sent": {
+      "reels": {
         "content": "$1"
       },
-      "received": {
+      "posts": {
         "content": "$2"
       },
-      "failed": {
+      "files": {
         "content": "$3"
+      },
+      "failed": {
+        "content": "$4"
       }
     }
-  },
-  "noReels": {
-    "message": "No Reels were found in this conversation."
   },
   "saveAgain": {
     "message": "Save again"
@@ -85,9 +88,6 @@
   "noMessages": {
     "message": "Could not read any message from this conversation. Make sure it is open in the Instagram tab and try again."
   },
-  "videoNotFound": {
-    "message": "video not found (deleted, private account or Instagram changed its format)"
-  },
   "periodLegend": {
     "message": "Period (optional)"
   },
@@ -102,5 +102,37 @@
   },
   "start": {
     "message": "Start export"
+  },
+  "diagnostics": {
+    "message": "responses captured: $RESPONSES$ · message list: $LIST$",
+    "placeholders": {
+      "responses": {
+        "content": "$1"
+      },
+      "list": {
+        "content": "$2"
+      }
+    }
+  },
+  "scanHint": {
+    "message": "If the count stops growing, scroll the conversation up yourself in the Instagram tab; everything it loads is captured"
+  },
+  "listNotFound": {
+    "message": "Could not find the message list to scroll: scroll the conversation up yourself in the Instagram tab"
+  },
+  "list_text": {
+    "message": "found"
+  },
+  "list_guess": {
+    "message": "guessed"
+  },
+  "list_none": {
+    "message": "not found"
+  },
+  "noShares": {
+    "message": "No Reels or posts were found in this conversation (or period)."
+  },
+  "mediaNotFound": {
+    "message": "media not found (deleted, private account or Instagram changed its format)"
   }
 }

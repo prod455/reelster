@@ -3,7 +3,7 @@
 <h1 align="center">Reelster</h1>
 
 <p align="center">
-  Exporta todos os Reels <b>enviados e recebidos</b> numa conversa do Instagram Direct para um único <code>.tar.gz</code>.<br>
+  Exporta todos os Reels e posts <b>enviados e recebidos</b> numa conversa do Instagram Direct para um único <code>.tar.gz</code>.<br>
   JavaScript puro · Manifest V3 · zero dependências · nada sai do seu navegador.
 </p>
 
@@ -15,12 +15,12 @@
 
 ```
 reelster-<id-da-conversa>-2026-10-30.tar.gz
-├── enviados/      # Reels que você mandou
-├── recebidos/     # Reels que você recebeu
+├── enviados/      # o que você mandou: Reels (.mp4) e posts/ (todas as fotos de cada post)
+├── recebidos/     # o que você recebeu, mesma estrutura
 └── manifest.json  # links, datas, remetentes e falhas
 ```
 
-Um `.mp4` por Reel, na maior resolução disponível, nomeado `<data UTC>_<hora>_<shortcode>.mp4`. Reel repetido na mesma direção entra uma vez só. Reel apagado ou de conta privada vai para `failed` no `manifest.json` sem interromper a exportação.
+Um `.mp4` por Reel e todas as fotos (ou vídeos de carrossel) de cada post, na maior resolução disponível, nomeado `<data UTC>_<hora>_<shortcode>.mp4`. Reel ou post repetido na mesma direção entra uma vez só. Item apagado ou de conta privada vai para `failed` no `manifest.json` sem interromper a exportação.
 
 ## Instalação
 
@@ -31,9 +31,9 @@ Um `.mp4` por Reel, na maior resolução disponível, nomeado `<data UTC>_<hora>
 ## Uso
 
 1. Abra [instagram.com/direct](https://www.instagram.com/direct/inbox/) e entre na conversa.
-2. Clique no ícone do Reelster → **Exportar Reels desta conversa**. Abre uma janelinha.
+2. Clique no ícone do Reelster → **Exportar Reels e posts desta conversa**. Abre uma janelinha.
 3. Se quiser, escolha o período (**De** / **Até**) e clique em **Começar exportação**.
-4. A aba do Instagram recarrega e rola sozinha até o começo da conversa (ou do período). Deixe as duas abertas e a aba do Instagram visível; **Parar e baixar agora** baixa só o que já foi lido.
+4. A aba do Instagram recarrega e rola sozinha até o começo da conversa (ou do período). Deixe as duas abertas e a aba do Instagram visível; **Parar e baixar agora** baixa só o que já foi lido. Se o número parar de subir, role a conversa pra cima você mesmo: tudo que o Instagram carregar é capturado.
 5. No fim, o navegador salva o `.tar.gz`.
 
 ## Desenvolvimento

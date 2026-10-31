@@ -1,5 +1,5 @@
 import { messagesForThread, parseBodies } from "./lib/messages.js";
-import { reelsFromMessages, shortcodeToMediaId, videoFromSources } from "./lib/reels.js";
+import { mediaFromSources, sharesFromMessages, shortcodeToMediaId } from "./lib/shares.js";
 import { archiveEntries, failureSummary } from "./lib/exporter.js";
 import { tarGzStream } from "./lib/tar.js";
 import { inPeriod, isBeforePeriod, parsePeriod } from "./lib/period.js";
@@ -10,6 +10,7 @@ const progressEl = document.getElementById("progress");
 const stopButton = document.getElementById("stop");
 const saveButton = document.getElementById("save");
 const failuresEl = document.getElementById("failures");
+const diagnosticsEl = document.getElementById("diagnostics");
 document.getElementById("title").textContent = t("exportTitle");
 document.getElementById("keep-open").textContent = t("keepOpen");
 stopButton.textContent = t("stopNow");
@@ -40,7 +41,7 @@ async function inTab(func, ...args) {
 
 // --- Functions below run inside the Instagram tab; they must be self-contained.
 
-function drainAndScroll() {
+function drainAndScroll(knownTexts) {
   const bodies = window.__reelsterBodies ? window.__reelsterBodies.splice(0) : [];
   if (!window.__reelsterReadSsr) {
     // The newest messages are rendered into the HTML instead of fetched.
@@ -49,25 +50,42 @@ function drainAndScroll() {
       if (script.textContent.includes("slide_messages")) bodies.push(script.textContent);
     }
   }
-  // The message list is the right-most large scrollable element (the inbox is on the left).
-  let list = null;
-  for (const el of document.querySelectorAll("div")) {
+  const scrollable = (el) => {
     const overflow = getComputedStyle(el).overflowY;
-    if ((overflow !== "auto" && overflow !== "scroll") || el.clientHeight < 200 || el.scrollHeight <= el.clientHeight) continue;
-    if (!list || el.getBoundingClientRect().left > list.getBoundingClientRect().left) list = el;
+    return (overflow === "auto" || overflow === "scroll") && el.scrollHeight > el.clientHeight;
+  };
+  // Best guess: the scrollable ancestor of a message we already read.
+  let list = null;
+  let found = "none";
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let text = walker.nextNode(); text && !list; text = walker.nextNode()) {
+    if (!knownTexts.some((known) => text.data.includes(known))) continue;
+    for (let el = text.parentElement; el; el = el.parentElement) {
+      if (scrollable(el)) { list = el; found = "text"; break; }
+    }
+  }
+  // Fallback: the right-most large scrollable element (the inbox is on the left).
+  if (!list) {
+    for (const el of document.querySelectorAll("div")) {
+      if (!scrollable(el) || el.clientHeight < 200) continue;
+      if (!list || el.getBoundingClientRect().left > list.getBoundingClientRect().left) list = el;
+    }
+    if (list) found = "guess";
   }
   if (list) {
     // Nudge down, then jump to the oldest message. A negative top also covers
-    // column-reverse lists; regular lists clamp it to 0.
+    // column-reverse lists; regular lists clamp it to 0. Some lists only react
+    // to wheel input, so send that too.
     list.scrollBy(0, 400);
     list.scrollTo(0, -list.scrollHeight);
+    list.dispatchEvent(new WheelEvent("wheel", { deltaY: -2000, bubbles: true, cancelable: true }));
   }
-  return { bodies, hasHook: Array.isArray(window.__reelsterBodies), foundList: Boolean(list) };
+  return { bodies, hasHook: Array.isArray(window.__reelsterBodies), found };
 }
 
-// Asks Instagram for a reel's media in three independent ways and returns
-// every raw answer; the extension side picks the video (videoFromSources).
-async function fetchVideoSources(shortcode, mediaId, docId) {
+// Asks Instagram for a reel's or post's media in three independent ways and returns
+// every raw answer; the extension side picks the files (mediaFromSources).
+async function fetchMediaSources(shortcode, mediaId, docId) {
   const csrf = /(?:^|;\s*)csrftoken=([^;]+)/.exec(document.cookie)?.[1] ?? "";
   let dtsg = "";
   for (const script of document.scripts) {
@@ -117,9 +135,9 @@ async function fetchVideoSources(shortcode, mediaId, docId) {
   ];
 }
 
-// Downloads a video with the Instagram page's own origin and returns it as a
+// Downloads a file with the Instagram page's own origin and returns it as a
 // data: URL. Fallback for when the CDN refuses the extension's request.
-async function fetchVideoInTab(url) {
+async function fetchFileInTab(url) {
   try {
     const response = await fetch(url);
     if (!response.ok) return { error: `HTTP ${response.status}` };
@@ -159,44 +177,54 @@ async function reloadInstagramTab() {
 /** Scrolls the chat up and collects its messages until its start or the period start. */
 async function readThread(viewer, period) {
   const messages = new Map();
+  const threadIds = new Set([threadId]);
   let stopped = false;
   let oldest = Infinity;
   let lastNewAt = Date.now();
+  let responses = 0;
   stopButton.hidden = false;
   stopButton.onclick = () => (stopped = true);
   while (!stopped && Date.now() - lastNewAt < IDLE_MS_TO_FINISH && !isBeforePeriod(oldest, period)) {
     await sleep(SCROLL_INTERVAL_MS);
-    const { bodies, hasHook } = await inTab(drainAndScroll);
+    const knownTexts = [...messages.values()]
+      .map((m) => (m.text_body ?? m.content?.text_body ?? "").trim().slice(0, 40))
+      .filter((text) => text.length >= 4)
+      .slice(-20);
+    const { bodies, hasHook, found } = await inTab(drainAndScroll, knownTexts);
     if (!hasHook) throw new Error(t("noMessages"));
+    responses += bodies.length;
     const before = messages.size;
     for (const body of bodies) {
       for (const doc of parseBodies(body)) {
-        for (const node of messagesForThread(doc, threadId)) {
+        for (const node of messagesForThread(doc, threadIds)) {
           messages.set(String(node.message_id ?? node.id), node);
           oldest = Math.min(oldest, Number(node.timestamp_ms));
         }
       }
     }
     if (messages.size > before) lastNewAt = Date.now();
-    const reels = reelsFromMessages(messages.values(), viewer).filter((r) => inPeriod(r.sentAt, period));
-    statusEl.textContent = t("stepScan", messages.size, reels.length);
+    const shares = sharesFromMessages(messages.values(), viewer).filter((s) => inPeriod(s.sentAt, period));
+    const reels = shares.filter((s) => s.kind === "reel").length;
+    statusEl.textContent = t("stepScan", messages.size, reels, shares.length - reels);
+    diagnosticsEl.textContent = t(found === "none" ? "listNotFound" : "scanHint") + " · " +
+      t("diagnostics", responses, t(`list_${found}`));
   }
   stopButton.hidden = true;
   if (messages.size === 0) throw new Error(t("noMessages"));
   return [...messages.values()];
 }
 
-async function resolveVideo(reel) {
+async function resolveMedia(share) {
   await sleep(RESOLVE_DELAY_MS);
-  const sources = await inTab(fetchVideoSources, reel.shortcode, shortcodeToMediaId(reel.shortcode), POST_QUERY_DOC_ID);
+  const sources = await inTab(fetchMediaSources, share.shortcode, shortcodeToMediaId(share.shortcode), POST_QUERY_DOC_ID);
   try {
-    return videoFromSources(sources, reel.shortcode);
+    return mediaFromSources(sources, share.shortcode);
   } catch (error) {
-    throw new Error(`${t("videoNotFound")} [${error.message}]`);
+    throw new Error(`${t("mediaNotFound")} [${error.message}]`);
   }
 }
 
-async function fetchVideo(url) {
+async function fetchMedia(url) {
   let direct;
   try {
     const response = await fetch(url);
@@ -205,8 +233,8 @@ async function fetchVideo(url) {
   } catch (error) {
     direct = String(error);
   }
-  const { dataUrl, error } = await inTab(fetchVideoInTab, url);
-  if (error) throw new Error(`video download failed [extension: ${direct}; tab: ${error}]`);
+  const { dataUrl, error } = await inTab(fetchFileInTab, url);
+  if (error) throw new Error(`download failed [extension: ${direct}; tab: ${error}]`);
   return new Uint8Array(await (await fetch(dataUrl)).arrayBuffer());
 }
 
@@ -229,16 +257,17 @@ async function run(period) {
   statusEl.textContent = t("stepReload");
   await chrome.tabs.update(tabId, { active: true });
   await reloadInstagramTab();
-  const reels = reelsFromMessages(await readThread(viewer, period), viewer).filter((r) => inPeriod(r.sentAt, period));
-  if (reels.length === 0) {
+  const shares = sharesFromMessages(await readThread(viewer, period), viewer).filter((s) => inPeriod(s.sentAt, period));
+  diagnosticsEl.textContent = "";
+  if (shares.length === 0) {
     progressEl.hidden = true;
-    statusEl.textContent = t("noReels");
+    statusEl.textContent = t("noShares");
     return;
   }
 
   let manifest;
   async function* entries() {
-    for await (const entry of archiveEntries({ reels, resolveVideo, fetchVideo, threadId, period, onProgress })) {
+    for await (const entry of archiveEntries({ shares, resolveMedia, fetchMedia, threadId, period, onProgress })) {
       if (entry.name === "manifest.json") {
         manifest = JSON.parse(new TextDecoder().decode(entry.data));
         statusEl.textContent = t("stepCompress");
@@ -251,8 +280,8 @@ async function run(period) {
   save(blob, filename);
   saveButton.hidden = false;
   saveButton.onclick = () => save(blob, filename);
-  const { sent, received, failed } = manifest.totals;
-  statusEl.textContent = t("done", sent, received, failed);
+  const { reels, posts, post_files, failed } = manifest.totals;
+  statusEl.textContent = t("done", reels.sent + reels.received, posts.sent + posts.received, post_files, failed);
   for (const { error, count } of failureSummary(manifest.failed)) {
     failuresEl.append(Object.assign(document.createElement("li"), { textContent: `${count}× ${error}` }));
   }
