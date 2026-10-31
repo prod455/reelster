@@ -28,6 +28,7 @@ reelster-340282366841710300949128123456789-2026-10-30.tar.gz
 ```
 
 - One `.mp4` per Reel, highest resolution available, named `<UTC date>_<time>_<shortcode>.mp4` so they sort chronologically.
+- Optional period filter: from/to dates, inclusive, in your local time.
 - A Reel shared more than once in the same direction is stored once (the oldest share).
 - Reels that can no longer be downloaded (deleted, private account) are listed under `failed` in `manifest.json` instead of aborting the export.
 
@@ -42,9 +43,10 @@ Works in Chrome, Edge, Brave, Opera and any Chromium ≥ 116.
 ## Use
 
 1. Open [instagram.com/direct](https://www.instagram.com/direct/inbox/) and click the conversation.
-2. Click the Reelster icon → **Export Reels from this conversation**.
-3. The Instagram tab reloads and scrolls up by itself to the start of the chat. Keep both tabs open; press **Stop and download now** if you only want the recent part.
-4. When it finishes, the `.tar.gz` is saved by your browser.
+2. Click the Reelster icon → **Export Reels from this conversation**. A small window opens.
+3. Optionally pick a period (**From** / **To**), then **Start export**.
+4. The Instagram tab reloads and scrolls up by itself to the start of the chat (or of the period). Keep both open and the Instagram tab visible; press **Stop and download now** to keep only what was read so far.
+5. When it finishes, the `.tar.gz` is saved by your browser.
 
 Extract with `tar -xzf reelster-*.tar.gz` (macOS/Linux) or `tar -xzf` in Windows Terminal / 7-Zip.
 

@@ -2,6 +2,15 @@
 
 All notable changes are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [1.3.0] - 2026-10-31
+
+### Fixed
+- Exports stopped after the most recent messages. The export now opens in its own small window so the Instagram tab stays visible (Chrome freezes hidden tabs, and Instagram only loads older messages while it renders), and reading waits 20 s without new messages before deciding it reached the start.
+- Message responses delivered as `arraybuffer` or `blob` XHRs are captured too.
+
+### Added
+- Optional period (from/to dates, both inclusive, local time). With a start date, reading stops as soon as it reaches that day. The period is recorded in `manifest.json`.
+
 ## [1.2.0] - 2026-10-30
 
 ### Fixed

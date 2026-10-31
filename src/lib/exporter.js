@@ -10,8 +10,9 @@ const encoder = new TextEncoder();
  *
  * resolveVideo(reel) -> video URL, for reels whose message has no inline video.
  * fetchVideo(url) -> Uint8Array
+ * period: the `{ from, to }` the reels were filtered with, recorded in the manifest.
  */
-export async function* archiveEntries({ reels, resolveVideo, fetchVideo, threadId, onProgress }) {
+export async function* archiveEntries({ reels, resolveVideo, fetchVideo, threadId, period = { from: null, to: null }, onProgress }) {
   const exported = [];
   const failed = [];
   for (const [index, reel] of reels.entries()) {
@@ -39,6 +40,10 @@ export async function* archiveEntries({ reels, resolveVideo, fetchVideo, threadI
     generator: "reelster",
     thread_id: threadId,
     exported_at: new Date().toISOString(),
+    period: {
+      from: period.from === null ? null : new Date(period.from).toISOString(),
+      to: period.to === null ? null : new Date(period.to).toISOString(),
+    },
     totals: { sent: count("sent"), received: count("received"), failed: failed.length },
     reels: exported,
     failed,

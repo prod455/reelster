@@ -2,6 +2,7 @@ import { messagesForThread, parseBodies } from "./lib/messages.js";
 import { reelsFromMessages, shortcodeToMediaId, videoFromSources } from "./lib/reels.js";
 import { archiveEntries, failureSummary } from "./lib/exporter.js";
 import { tarGzStream } from "./lib/tar.js";
+import { inPeriod, isBeforePeriod, parsePeriod } from "./lib/period.js";
 
 const t = (key, ...subs) => chrome.i18n.getMessage(key, subs.map(String));
 const statusEl = document.getElementById("status");
@@ -12,6 +13,12 @@ const failuresEl = document.getElementById("failures");
 document.getElementById("title").textContent = t("exportTitle");
 document.getElementById("keep-open").textContent = t("keepOpen");
 stopButton.textContent = t("stopNow");
+const setupForm = document.getElementById("setup");
+document.getElementById("period-legend").textContent = t("periodLegend");
+document.getElementById("from-label").textContent = t("periodFrom");
+document.getElementById("to-label").textContent = t("periodTo");
+document.getElementById("period-hint").textContent = t("periodHint");
+document.getElementById("start").textContent = t("start");
 saveButton.textContent = t("saveAgain");
 
 const params = new URLSearchParams(location.search);
@@ -20,7 +27,7 @@ const threadId = params.get("thread");
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const SCROLL_INTERVAL_MS = 1_500;
-const IDLE_ROUNDS_TO_FINISH = 6; // ~9 s without new messages = start of the chat
+const IDLE_MS_TO_FINISH = 20_000; // this long without new messages = start of the chat
 const RESOLVE_DELAY_MS = 800;
 // Instagram's post query (PolarisPostRootQuery). Meta rotates these ids; when
 // it stops working the HTML fallback below still applies.
@@ -149,23 +156,30 @@ async function reloadInstagramTab() {
   await loaded;
 }
 
-async function readWholeThread(viewer) {
+/** Scrolls the chat up and collects its messages until its start or the period start. */
+async function readThread(viewer, period) {
   const messages = new Map();
   let stopped = false;
+  let oldest = Infinity;
+  let lastNewAt = Date.now();
   stopButton.hidden = false;
   stopButton.onclick = () => (stopped = true);
-  for (let idle = 0; idle < IDLE_ROUNDS_TO_FINISH && !stopped; ) {
+  while (!stopped && Date.now() - lastNewAt < IDLE_MS_TO_FINISH && !isBeforePeriod(oldest, period)) {
     await sleep(SCROLL_INTERVAL_MS);
     const { bodies, hasHook } = await inTab(drainAndScroll);
     if (!hasHook) throw new Error(t("noMessages"));
     const before = messages.size;
     for (const body of bodies) {
       for (const doc of parseBodies(body)) {
-        for (const node of messagesForThread(doc, threadId)) messages.set(String(node.message_id ?? node.id), node);
+        for (const node of messagesForThread(doc, threadId)) {
+          messages.set(String(node.message_id ?? node.id), node);
+          oldest = Math.min(oldest, Number(node.timestamp_ms));
+        }
       }
     }
-    idle = messages.size > before ? 0 : idle + 1;
-    statusEl.textContent = t("stepScan", messages.size, reelsFromMessages(messages.values(), viewer).length);
+    if (messages.size > before) lastNewAt = Date.now();
+    const reels = reelsFromMessages(messages.values(), viewer).filter((r) => inPeriod(r.sentAt, period));
+    statusEl.textContent = t("stepScan", messages.size, reels.length);
   }
   stopButton.hidden = true;
   if (messages.size === 0) throw new Error(t("noMessages"));
@@ -208,12 +222,14 @@ function save(blob, filename) {
   addEventListener("pagehide", () => URL.revokeObjectURL(url), { once: true });
 }
 
-async function run() {
+async function run(period) {
   if (!Number.isInteger(tabId) || !threadId) throw new Error("missing tab or thread");
   const viewer = await viewerId();
+  progressEl.hidden = false;
   statusEl.textContent = t("stepReload");
+  await chrome.tabs.update(tabId, { active: true });
   await reloadInstagramTab();
-  const reels = reelsFromMessages(await readWholeThread(viewer), viewer);
+  const reels = reelsFromMessages(await readThread(viewer, period), viewer).filter((r) => inPeriod(r.sentAt, period));
   if (reels.length === 0) {
     progressEl.hidden = true;
     statusEl.textContent = t("noReels");
@@ -222,7 +238,7 @@ async function run() {
 
   let manifest;
   async function* entries() {
-    for await (const entry of archiveEntries({ reels, resolveVideo, fetchVideo, threadId, onProgress })) {
+    for await (const entry of archiveEntries({ reels, resolveVideo, fetchVideo, threadId, period, onProgress })) {
       if (entry.name === "manifest.json") {
         manifest = JSON.parse(new TextDecoder().decode(entry.data));
         statusEl.textContent = t("stepCompress");
@@ -242,10 +258,25 @@ async function run() {
   }
 }
 
-run().catch((error) => {
+function fail(error) {
   progressEl.hidden = true;
   stopButton.hidden = true;
   statusEl.classList.add("error");
   statusEl.textContent = t("error", error?.message ?? error);
   console.error(error);
+}
+
+setupForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  let period;
+  try {
+    period = parsePeriod(setupForm.elements.from.value, setupForm.elements.to.value);
+  } catch (error) {
+    statusEl.classList.add("error");
+    statusEl.textContent = t("error", error.message);
+    return;
+  }
+  statusEl.classList.remove("error");
+  setupForm.hidden = true;
+  run(period).catch(fail);
 });

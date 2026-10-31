@@ -18,7 +18,7 @@
     "message": "Exportando Reels"
   },
   "keepOpen": {
-    "message": "Deixe esta aba e a do Instagram abertas. A aba do Instagram vai rolar sozinha até o começo da conversa."
+    "message": "Deixe esta janela e a aba do Instagram abertas. A aba do Instagram recarrega e rola sozinha até o começo da conversa (ou do período)."
   },
   "stepScan": {
     "message": "Lendo a conversa (rolando pra cima): $MESSAGES$ mensagens, $REELS$ Reels",
@@ -87,5 +87,20 @@
   },
   "videoNotFound": {
     "message": "vídeo não encontrado (apagado, conta privada ou o Instagram mudou o formato)"
+  },
+  "periodLegend": {
+    "message": "Período (opcional)"
+  },
+  "periodFrom": {
+    "message": "De"
+  },
+  "periodTo": {
+    "message": "Até"
+  },
+  "periodHint": {
+    "message": "Deixe em branco pra exportar a conversa inteira. Com data inicial, a leitura para assim que chega nesse dia."
+  },
+  "start": {
+    "message": "Começar exportação"
   }
 }

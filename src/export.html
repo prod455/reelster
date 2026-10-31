@@ -10,7 +10,16 @@
   <main class="page">
     <h1 id="title"></h1>
     <p id="keep-open"></p>
-    <progress id="progress"></progress>
+    <form id="setup">
+      <fieldset class="period">
+        <legend id="period-legend"></legend>
+        <label><span id="from-label"></span> <input id="from" type="date"></label>
+        <label><span id="to-label"></span> <input id="to" type="date"></label>
+      </fieldset>
+      <p id="period-hint"></p>
+      <button id="start" type="submit"></button>
+    </form>
+    <progress id="progress" hidden></progress>
     <div id="status" class="status" role="status" aria-live="polite"></div>
     <ul id="failures" class="failures"></ul>
     <button id="stop" type="button" hidden></button>
