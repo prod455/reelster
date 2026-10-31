@@ -27,15 +27,29 @@ test("parseBodies reads newline-delimited incremental responses and skips junk l
 
 test("messagesForThread finds slide_messages nodes of the open chat in any shape", () => {
   const ssr = { require: [["X", "handle", null, [{ __bbox: { result: page([node("m1")]) } }]]] };
-  assert.deepEqual(messagesForThread(ssr, "555").map((n) => n.message_id), ["m1"]);
+  assert.deepEqual(messagesForThread(ssr, new Set(["555"])).map((n) => n.message_id), ["m1"]);
 });
 
 test("messagesForThread skips other chats preloaded by the inbox", () => {
   const inbox = { data: { inbox: [page([node("m1")]).data.fetch__SlideThread, page([node("x1", "777")], "777").data.fetch__SlideThread] } };
-  assert.deepEqual(messagesForThread(inbox, "555").map((n) => n.message_id), ["m1"]);
+  assert.deepEqual(messagesForThread(inbox, new Set(["555"])).map((n) => n.message_id), ["m1"]);
 });
 
 test("messagesForThread matches the URL id against any id-like field of the thread", () => {
   const doc = { data: { t: { thread_key: "v2-id", id: "other", slide_messages: { edges: [{ node: node("m1", "fb") }] } } } };
-  assert.equal(messagesForThread(doc, "v2-id").length, 1);
+  assert.equal(messagesForThread(doc, new Set(["v2-id"])).length, 1);
+});
+
+test("messagesForThread learns the chat's other ids so later pages that only carry them still match", () => {
+  const ids = new Set(["555"]);
+  messagesForThread(page([node("m1", "fb-1")]), ids); // first page: URL id on the thread, fbid on messages
+  const later = { data: { more: { id: "fb-1", slide_messages: { edges: [{ node: node("m0", "fb-1") }] } } } };
+  assert.deepEqual(messagesForThread(later, ids).map((n) => n.message_id), ["m0"]);
+  assert.ok(ids.has("fb-1"));
+});
+
+test("messagesForThread does not learn ids from other chats", () => {
+  const ids = new Set(["555"]);
+  messagesForThread(page([node("x1", "777")], "777"), ids);
+  assert.deepEqual([...ids], ["555"]);
 });

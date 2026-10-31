@@ -33,18 +33,22 @@ export function parseBodies(text) {
   }
 }
 
-// Every id-like scalar of the object holding the messages (`id`,
-// `thread_fbid`, `thread_key`, ...): the URL id is matched against all of them.
-function idsOf(container) {
-  const ids = new Set();
+// The thread's own ids (`id`, `thread_fbid`, `thread_key`, ...). Other id
+// fields such as `viewer_id` are left out: they are shared across chats.
+function threadIdsOf(container) {
+  const ids = [];
   for (const [key, value] of Object.entries(container)) {
-    if ((typeof value === "string" || typeof value === "number") && /id|key/i.test(key)) ids.add(String(value));
+    if ((typeof value === "string" || typeof value === "number") && /^id$|thread/i.test(key)) ids.push(String(value));
   }
   return ids;
 }
 
-/** Message nodes of chat `threadId` found anywhere in a parsed body. */
-export function messagesForThread(doc, threadId) {
+/**
+ * Message nodes of one chat found anywhere in a parsed body. `knownIds`
+ * starts with the id from the URL and grows with the other ids the chat is
+ * seen with, because older pages may carry only those.
+ */
+export function messagesForThread(doc, knownIds) {
   const found = [];
   const stack = [doc];
   while (stack.length) {
@@ -56,9 +60,15 @@ export function messagesForThread(doc, threadId) {
     }
     const edges = value.slide_messages?.edges;
     if (Array.isArray(edges)) {
-      const ids = idsOf(value);
+      const containerIds = threadIdsOf(value);
+      const containerMatches = containerIds.some((id) => knownIds.has(id));
       for (const { node } of edges) {
-        if (node && (ids.has(threadId) || String(node.thread_fbid) === threadId)) found.push(node);
+        if (!node) continue;
+        const fbid = node.thread_fbid == null ? null : String(node.thread_fbid);
+        if (!containerMatches && !knownIds.has(fbid)) continue;
+        found.push(node);
+        for (const id of containerIds) knownIds.add(id);
+        if (fbid) knownIds.add(fbid);
       }
     }
     for (const [key, child] of Object.entries(value)) if (key !== "slide_messages") stack.push(child);

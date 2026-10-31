@@ -1,6 +1,6 @@
 {
   "name": "reelster",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Browser extension that exports every Reel sent and received in an Instagram DM thread into a single .tar.gz.",
   "private": true,
   "type": "module",

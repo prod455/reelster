@@ -51,3 +51,4 @@ button + button { margin-top: 8px; }
 .period legend { padding: 0 4px; color: var(--fg); font-weight: 600; }
 .period label { display: flex; flex-direction: column; gap: 4px; flex: 1 1 140px; color: var(--muted); }
 input[type="date"] { font: inherit; padding: 6px 8px; border: 1px solid var(--track); border-radius: 6px; background: var(--bg); color: var(--fg); }
+.diagnostics { font-size: 12px; }
